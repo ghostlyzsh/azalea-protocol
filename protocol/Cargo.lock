@@ -15,6 +15,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
+name = "buffer"
+version = "0.1.0"
+source = "git+https://github.com/ghostlyzsh/azalea-protocol?branch=main#93deb01f156381a313cb92fef947e39d67d30947"
+
+[[package]]
 name = "bytes"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -136,6 +141,7 @@ dependencies = [
 name = "protocol"
 version = "0.1.0"
 dependencies = [
+ "buffer",
  "tokio",
 ]
 

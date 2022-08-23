@@ -1,19 +1,21 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use crate::packet::Packet;
+use crate::packet::{ PacketType };
+use buffer::buffer::ByteBuf;
 
 pub struct PacketRegistry {
-    register: Arc<RwLock<HashMap<i32, Box<dyn Packet>>>>,
+    register: HashMap<i32, fn(ByteBuf) -> PacketType>,
 }
 
 impl PacketRegistry {
-    pub async fn register_packet<T>(&mut self, id: i32, packet: Box<dyn Packet>) {
-        let mut w = self.register.write().await;
-        (*w).insert(id, packet);
+    pub fn register_packet(&mut self, id: i32, handle: fn(ByteBuf) -> PacketType) {
+        self.register.insert(id, handle);
     }
-
-    pub async fn get_registry(&self) {
-        self.register.read().await;
+    
+    pub fn new() -> Self {
+        Self {
+            register: HashMap::new()
+        }
     }
 }

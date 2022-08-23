@@ -1,25 +1,31 @@
 use crate::packet_registry::PacketRegistry;
+use crate::serverbound::status;
 
 pub trait Packet {
-    fn register_packet(&self, registry: PacketRegistry);
-    fn create_packet() -> Self where Self: Sized;
+    fn register_packet(&self, registry: &'static mut PacketRegistry);
+    fn new(buffer: buffer::buffer::ByteBuf) -> PacketType;
 }
 
 #[macro_export]
 macro_rules! create_packets {
-    ( $($packet_type:ty {
+    ( $($packet_type:ident {
         id $packet_id:literal;
         $(protocol $protocol_version:literal;)?
     })* ) => {
+        $(
         impl $crate::packet::Packet for $packet_type {
-            fn register_packet(&self, registry: $crate::packet_registry::PacketRegistry) {
-                registry.register_packet($packet_id, Box::new($packet_type { buffer::buffer::ByteBuf::new_write() }));
+            fn register_packet(&self, registry: &'static mut $crate::packet_registry::PacketRegistry) {
+                registry.register_packet($packet_id, Self::new);
             }
 
-            fn create_packet(buffer: buffer::buffer::ByteBuf)-> $packet_type
-            where Self: Sized {
-                $packet_type {buffer}
+            fn new(buffer: buffer::buffer::ByteBuf) -> $crate::packet::PacketType {
+                $crate::packet::PacketType::$packet_type(Self {buffer})
             }
         }
+        )*
     };
+}
+
+pub enum PacketType {
+    StatusRequest(status::StatusRequest)
 }
