@@ -2,7 +2,7 @@ use crate::packet_registry::PacketRegistry;
 use crate::serverbound::status;
 
 pub trait Packet {
-    fn register_packet(&self, registry: &'static mut PacketRegistry);
+    fn register_packet(registry: &'static mut PacketRegistry);
     fn new(buffer: buffer::buffer::ByteBuf) -> PacketType;
 }
 
@@ -14,7 +14,7 @@ macro_rules! create_packets {
     })* ) => {
         $(
         impl $crate::packet::Packet for $packet_type {
-            fn register_packet(&self, registry: &'static mut $crate::packet_registry::PacketRegistry) {
+            fn register_packet(registry: &'static mut $crate::packet_registry::PacketRegistry) {
                 registry.register_packet($packet_id, Self::new);
             }
 
@@ -27,5 +27,6 @@ macro_rules! create_packets {
 }
 
 pub enum PacketType {
-    StatusRequest(status::StatusRequest)
+    StatusRequest(status::StatusRequest),
+    PingRequest(status::PingRequest)
 }

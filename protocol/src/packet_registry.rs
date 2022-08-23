@@ -18,4 +18,25 @@ impl PacketRegistry {
             register: HashMap::new()
         }
     }
+
+    pub fn get_packet_type(&self, id: i32, buffer: ByteBuf) -> Result<PacketType, ()> {
+        let value = match self.register.get(&id) {
+            Some(n) => n,
+            None => { println!("Invalid Packet ID {}", id); return Err(()); }
+        };
+        Ok(value(buffer))
+    }
+}
+
+#[macro_export]
+macro_rules! create_registry {
+    ( $($packet_type:ident),* ) => {
+        {
+            let registry = $crate::packet_registry::PacketRegistry::new();
+            $(
+                $packet_type::register_packet(registry);
+            )*
+            registry
+        }
+    };
 }

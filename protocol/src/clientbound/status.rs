@@ -1,18 +1,18 @@
 use buffer::buffer::ByteBuf;
 
-pub struct StatusRequest {
+pub struct StatusResponse {
     buffer: ByteBuf
 }
 
-pub struct PingRequest {
+pub struct PingResponse {
     buffer: ByteBuf
 }
 
 crate::create_packets!(
-    StatusRequest {
+    StatusResponse {
         id 0x00;
     }
-    PingRequest {
+    PingResponse {
         id 0x01;
     }
 );
