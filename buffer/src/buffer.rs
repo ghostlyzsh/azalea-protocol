@@ -12,6 +12,27 @@ impl ByteBuf {
     pub fn write(&mut self, index: usize, value: BufTypes) {
         self.buffer.insert(index, value);
     }
+
+    pub fn get_buffer(&self) -> Vec<u8> {
+        let mut buffer: Vec<u8> = Vec::new();
+        for elem in self.buffer.iter() {
+            let buf = match elem {
+                BufTypes::VarInt(v) =>  v.buffer.clone(),
+                BufTypes::VarLong(v) => v.buffer.clone(),
+                BufTypes::Short(v) =>   v.buffer.clone(),
+                BufTypes::Int(v) =>     v.buffer.clone(),
+                BufTypes::Long(v) =>    v.buffer.clone(),
+                BufTypes::Float(v) =>   v.buffer.clone(),
+                BufTypes::Double(v) =>  v.buffer.clone(),
+                BufTypes::Str(v) =>     v.buffer.clone(),
+                BufTypes::ByteArray(v) => v.buffer.clone(),
+                BufTypes::Bool(v) =>    v.buffer.clone(),
+                BufTypes::Byte(v) =>    v.buffer.clone(),
+            };
+            buffer.extend(&buf);
+        }
+        buffer
+    }
 }
 
 macro_rules! ord_with_self {
@@ -59,6 +80,7 @@ pub struct VarInt {
 impl VarInt {
     fn change(&mut self, t: i32) {
         self.data = t;
+        self.buffer.clear();
         let mut value: u32 = {
             let bytes = t.to_be_bytes();
             u32::from_be_bytes(bytes)
@@ -114,6 +136,7 @@ pub struct VarLong {
 impl VarLong {
     fn change(&mut self, t: i64) {
         self.data = t;
+        self.buffer.clear();
         let mut value: u64 = {
             let bytes = t.to_be_bytes();
             u64::from_be_bytes(bytes)
@@ -169,6 +192,7 @@ pub struct Short {
 impl Short {
     fn change(&mut self, t: i16) {
         self.data = t;
+        self.buffer.clear();
         let value: u16 = {
             let bytes = t.to_be_bytes();
             u16::from_be_bytes(bytes)
@@ -211,6 +235,7 @@ pub struct Int {
 impl Int {
     fn change(&mut self, t: i32) {
         self.data = t;
+        self.buffer.clear();
         let value: u32 = {
             let bytes = t.to_be_bytes();
             u32::from_be_bytes(bytes)
@@ -253,6 +278,7 @@ pub struct Long {
 impl Long {
     fn change(&mut self, t: i64) {
         self.data = t;
+        self.buffer.clear();
         let value: u64 = {
             let bytes = t.to_be_bytes();
             u64::from_be_bytes(bytes)
@@ -295,6 +321,7 @@ pub struct Float {
 impl Float {
     fn change(&mut self, t: f32) {
         self.data = t;
+        self.buffer.clear();
         unsafe {
             let value: u32 = std::mem::transmute::<f32, u32>(t);
             for i in 0..4 {
@@ -335,6 +362,7 @@ pub struct Double {
 impl Double {
     fn change(&mut self, t: f64) {
         self.data = t;
+        self.buffer.clear();
         unsafe {
             let value: u64 = std::mem::transmute::<f64, u64>(t);
             for i in 0..8 {
@@ -453,21 +481,24 @@ impl From<Bool> for bool {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Byte {
-    data: u8
+    data: u8,
+    buffer: Vec<u8>
 }
 
 impl Byte {
     fn change(&mut self, t: u8) {
         self.data = t;
+        self.buffer = vec![t];
     }
 }
 
 impl From<u8> for Byte {
     fn from(t: u8) -> Byte {
         Byte {
-            data: t
+            data: t,
+            buffer: vec![t]
         }
     }
 }
@@ -497,5 +528,4 @@ pub enum BufTypes {
     ByteArray(ByteArray),
     Bool(Bool),
     Byte(Byte),
-    Fail
 }
