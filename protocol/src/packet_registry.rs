@@ -4,12 +4,14 @@ use tokio::sync::RwLock;
 use crate::packet::{ PacketType };
 use buffer::buffer::ByteBuf;
 
+type PacketHandle = fn(ByteBuf) -> PacketType;
+
 pub struct PacketRegistry {
-    register: HashMap<i32, fn(ByteBuf) -> PacketType>,
+    register: HashMap<i32, PacketHandle>,
 }
 
 impl PacketRegistry {
-    pub fn register_packet(&mut self, id: i32, handle: fn(ByteBuf) -> PacketType) {
+    pub fn register_packet(&mut self, id: i32, handle: PacketHandle) {
         self.register.insert(id, handle);
     }
     
@@ -19,12 +21,15 @@ impl PacketRegistry {
         }
     }
 
-    pub fn get_packet_type(&self, id: i32, buffer: ByteBuf) -> Result<PacketType, ()> {
+    pub fn get_packet_type(&self, id: i32, buffer: ByteBuf) -> Result<PacketHandle, ()> {
         let value = match self.register.get(&id) {
-            Some(n) => n,
+            Some(n) => Ok(n),
             None => { println!("Invalid Packet ID {}", id); return Err(()); }
-        };
-        Ok(value(buffer))
+        }
+    }
+
+    pub fn send_packet(&self, id: i32, buffer: ByteBuf) {
+
     }
 }
 

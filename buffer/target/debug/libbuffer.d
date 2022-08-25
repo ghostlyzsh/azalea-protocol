@@ -1,1 +1,1 @@
-C:\Users\New\ User\azalea-protocol\buffer\target\debug\libbuffer.rlib: C:\Users\New\ User\azalea-protocol\buffer\src\buffer.rs C:\Users\New\ User\azalea-protocol\buffer\src\lib.rs
+/home/ghostlyzsh/dev/rust/azalea-protocol/buffer/target/debug/libbuffer.rlib: /home/ghostlyzsh/dev/rust/azalea-protocol/buffer/src/buffer.rs /home/ghostlyzsh/dev/rust/azalea-protocol/buffer/src/lib.rs

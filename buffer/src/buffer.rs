@@ -1,256 +1,501 @@
+use std::cmp::Ordering;
+
 pub struct ByteBuf {
-    buffer: Vec<u8>,
-    index: usize,
+    buffer: Vec<BufTypes>,
 }
 
 impl ByteBuf {
-    pub fn new_write() -> ByteBuf {
-        ByteBuf {
-            buffer: Vec::new(),
-            index: 0,
-        }
+    pub fn read(&self, index: usize) -> BufTypes{
+        self.buffer[index].clone()
     }
 
-    pub fn new_read(new_buffer: Vec<u8>) -> ByteBuf {
-        ByteBuf {
-            buffer: new_buffer,
-            index: 0,
-        }
+    pub fn write(&mut self, index: usize, value: BufTypes) {
+        self.buffer.insert(index, value);
     }
+}
 
-    pub fn read_var_i32(&mut self) -> i32 {
-        let mut value: i32 = 0;
-        let mut position: i32 = 0;
-        let mut current_byte: u8;
-
-        loop {
-            current_byte = self.read_byte();
-            value |= ((current_byte & 0x7F) as i32) << position;
-
-            if (current_byte & 0x80) == 0 {break;}
-
-            position += 7;
-
-            // TODO: proper error handling for too large VarInt
-            if position >= 32 {return -1;}
+macro_rules! ord_with_self {
+    ( $( $buf_type:ty ),* ) => {
+        $(
+        impl PartialEq for $buf_type {
+            fn eq(&self, other: &Self) -> bool {
+                self.data == other.data
+            }
         }
 
-        return value;
+        impl PartialOrd for $buf_type {
+            fn partial_cmp(&self, other: &Self)  -> Option<Ordering> {
+                self.data.partial_cmp(&other.data)
+            }
+        }
+        )*
     }
+}
 
-    pub fn read_var_i64(&mut self) -> i64 {
-        let mut value: i64 = 0;
-        let mut position: i32 = 0;
-        let mut current_byte: u8;
-
-        loop {
-            current_byte = self.read_byte();
-            value |= ((current_byte & 0x7F) as i64) << position;
-
-            if (current_byte & 0x80) == 0 {break;}
-
-            position += 7;
-
-            // TODO: proper error handling for VarLong too big
-            if position >= 64 {return -1;}
+macro_rules! ord_with_field {
+    ( $( $buf_type:ty { $field:ty } ),* ) =>  {
+        $(
+        impl PartialEq<$field> for $buf_type {
+            fn eq(&self, other: &$field) -> bool {
+                self.data == *other
+            }
         }
 
-        return value;
-    }
-
-    pub fn read_i64(&mut self) -> i64 {
-        let mut value: u64 = 0;
-        value |= ((self.read_byte() & 0xFF) as u64) << 56;
-        value |= ((self.read_byte() & 0xFF) as u64) << 48;
-        value |= ((self.read_byte() & 0xFF) as u64) << 40;
-        value |= ((self.read_byte() & 0xFF) as u64) << 32;
-        value |= ((self.read_byte() & 0xFF) as u64) << 24;
-        value |= ((self.read_byte() & 0xFF) as u64) << 16;
-        value |= ((self.read_byte() & 0xFF) as u64) << 8;
-        value |= (self.read_byte() & 0xFF) as u64;
-        return value as i64;
-    }
-
-    pub fn read_i32(&mut self) -> i32 {
-        let mut value: u32 = 0;
-        value |= ((self.read_byte() & 0xFF) as u32) << 24;
-        value |= ((self.read_byte() & 0xFF) as u32) << 16;
-        value |= ((self.read_byte() & 0xFF) as u32) << 8;
-        value |= (self.read_byte() & 0xFF) as u32;
-        value as i32
-    }
-
-    pub fn read_i16(&mut self) -> i16 {
-        let mut value: u16 = 0;
-        value |= ((self.read_byte() & 0xFF) as u16) << 8;
-        value |= (self.read_byte() & 0xFF) as u16;
-        value as i16
-    }
-
-    pub fn read_u16(&mut self) -> u16 {
-        self.read_i16() as u16
-    }
-
-    pub fn read_f32(&mut self) -> f32 {
-        let mut value: u32 = 0;
-
-        value |= ((self.read_byte() & 0xFF) as u32) << 24;
-        value |= ((self.read_byte() & 0xFF) as u32) << 16;
-        value |= ((self.read_byte() & 0xFF) as u32) << 8;
-        value |= (self.read_byte() & 0xFF) as u32;
-        f32::from_bits(value)
-    }
-
-    pub fn read_f64(&mut self) -> f64 {
-        let mut value: u64 = 0;
-
-        value |= ((self.read_byte() & 0xFF) as u64) << 56;
-        value |= ((self.read_byte() & 0xFF) as u64) << 48;
-        value |= ((self.read_byte() & 0xFF) as u64) << 40;
-        value |= ((self.read_byte() & 0xFF) as u64) << 32;
-        value |= ((self.read_byte() & 0xFF) as u64) << 24;
-        value |= ((self.read_byte() & 0xFF) as u64) << 16;
-        value |= ((self.read_byte() & 0xFF) as u64) << 8;
-        value |= (self.read_byte() & 0xFF) as u64;
-        f64::from_bits(value)
-    }
-
-    pub fn read_bool(&mut self) -> bool {
-        let value: u8 = self.read_byte();
-
-        if value == 0x01 {
-            return true;
-        } else {
-            return false;
+        impl PartialOrd<$field> for $buf_type {
+            fn partial_cmp(&self, other: &$field) -> Option<Ordering> {
+                self.data.partial_cmp(other)
+            }
         }
+        )*
     }
+}
 
-    pub fn read_string(&mut self) -> String {
-        let length: i32 = self.read_var_i32();
-        let bytes = self.read_bytes(length.try_into().unwrap());
-        String::from_utf8(bytes).unwrap()
-    }
+#[derive(Debug, Clone)]
+pub struct VarInt {
+    data: i32,
+    buffer: Vec<u8>
+}
 
-    pub fn read_bytes(&mut self, length: usize) -> Vec<u8> {
-        let mut value = Vec::with_capacity(length);
-        for _i in 0..length {
-            value.push(self.read_byte());
-        }
-        value
-    }
-
-    pub fn read_byte(&mut self) -> u8 {
-        self.index+=1;
-        self.buffer[self.index]
-    }
-
-    pub fn write_var_i32(&mut self, arg_value: i32) {
+impl VarInt {
+    fn change(&mut self, t: i32) {
+        self.data = t;
         let mut value: u32 = {
-            let bytes = arg_value.to_be_bytes();
+            let bytes = t.to_be_bytes();
             u32::from_be_bytes(bytes)
         };
         loop {
             if (value & !0x7F) == 0 {
-                self.write_byte(value as u8);
+                self.buffer.push(value as u8);
                 return;
             }
 
-            self.write_byte(((value & 0x7F) | 0x80).try_into().unwrap());
+            self.buffer.push(((value & 0x7F) | 0x80).try_into().unwrap());
 
             value >>= 7;
         }
     }
+}
 
-    pub fn write_var_i64(&mut self, arg_value: i64) {
+impl From<i32> for VarInt {
+    fn from(t: i32) -> Self {
+        let mut buffer = Vec::new();
+        let mut value: u32 = {
+            let bytes = t.to_be_bytes();
+            u32::from_be_bytes(bytes)
+        };
+        loop {
+            if (value & !0x7F) == 0 {
+                buffer.push(value as u8);
+                return VarInt {
+                    data: t,
+                    buffer: buffer
+                };
+            }
+
+            buffer.push(((value & 0x7F) | 0x80).try_into().unwrap());
+
+            value >>= 7;
+        }
+    }
+}
+
+impl From<VarInt> for i32 {
+    fn from(t: VarInt) -> Self {
+        t.data
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct VarLong {
+    data: i64,
+    buffer: Vec<u8>
+}
+
+impl VarLong {
+    fn change(&mut self, t: i64) {
+        self.data = t;
         let mut value: u64 = {
-            let bytes = arg_value.to_be_bytes();
+            let bytes = t.to_be_bytes();
             u64::from_be_bytes(bytes)
         };
         loop {
             if value & !(0x7F as u64) == 0 {
-                self.write_byte(value as u8);
+                self.buffer.push(value as u8);
+                return;
             }
 
-            self.write_byte(((value & 0x7F) | 0x80).try_into().unwrap());
+            self.buffer.push(((value & 0x7F) | 0x80).try_into().unwrap());
 
             value >>= 7;
         }
     }
+}
 
-    pub fn write_i64(&mut self, arg_value: i64) {
-        let value: u64 = {
-            let bytes = arg_value.to_be_bytes();
+impl From<i64> for VarLong {
+    fn from(t: i64) -> Self {
+        let mut buffer: Vec<u8> = Vec::new();
+        let mut value: u64 = {
+            let bytes = t.to_be_bytes();
             u64::from_be_bytes(bytes)
         };
-        for i in 0..8 {
-            self.write_byte(((value >> (i * 8)) & 0xFF).try_into().unwrap());
+        loop {
+            if value & !(0x7F as u64) == 0 {
+                buffer.push(value as u8);
+                return VarLong {
+                    data: t,
+                    buffer: buffer
+                };
+            }
+
+            buffer.push(((value & 0x7F) | 0x80).try_into().unwrap());
+
+            value >>= 7;
         }
     }
+}
 
-    pub fn write_i32(&mut self, arg_value: i32) {
-        let value: u32 = {
-            let bytes = arg_value.to_be_bytes();
-            u32::from_be_bytes(bytes)
-        };
-        for i in 0..4 {
-            self.write_byte(((value >> (i * 8)) & 0xFF).try_into().unwrap());
-        }
+impl From<VarLong> for i64 {
+    fn from(t: VarLong) -> Self {
+        t.data
     }
+}
 
-    pub fn write_i16(&mut self, arg_value: i16) {
+#[derive(Debug, Clone)]
+pub struct Short {
+    data: i16,
+    buffer: Vec<u8>
+}
+
+impl Short {
+    fn change(&mut self, t: i16) {
+        self.data = t;
         let value: u16 = {
-            let bytes = arg_value.to_be_bytes();
+            let bytes = t.to_be_bytes();
             u16::from_be_bytes(bytes)
         };
         for i in 0..2 {
-            self.write_byte(((value >> (i * 8)) & 0xFF).try_into().unwrap());
+            self.buffer.push(((value >> (i * 8)) & 0xFF).try_into().unwrap());
         }
     }
+}
 
-    pub fn write_u16(&mut self, arg_value: u16) {
-        self.write_i16(arg_value as i16);
+impl From<i16> for Short {
+    fn from(t: i16) -> Short {
+        let mut buffer: Vec<u8> = Vec::new();
+        let value: u16 = {
+            let bytes = t.to_be_bytes();
+            u16::from_be_bytes(bytes)
+        };
+        for i in 0..2 {
+            buffer.push(((value >> (i * 8)) & 0xFF).try_into().unwrap());
+        }
+        Short {
+            data: t,
+            buffer
+        }
     }
+}
 
-    pub fn write_f32(&mut self, arg_value: f32) {
+impl From<Short> for i16 {
+    fn from(t: Short) -> Self {
+        t.data
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Int {
+    data: i32,
+    buffer: Vec<u8>
+}
+
+impl Int {
+    fn change(&mut self, t: i32) {
+        self.data = t;
+        let value: u32 = {
+            let bytes = t.to_be_bytes();
+            u32::from_be_bytes(bytes)
+        };
+        for i in 0..4 {
+            self.buffer.push(((value >> (i * 8)) & 0xFF).try_into().unwrap());
+        }
+    }
+}
+
+impl From<i32> for Int {
+    fn from(t: i32) -> Int {
+        let mut buffer: Vec<u8> = Vec::new();
+        let value: u32 = {
+            let bytes = t.to_be_bytes();
+            u32::from_be_bytes(bytes)
+        };
+        for i in 0..4 {
+            buffer.push(((value >> (i * 8)) & 0xFF).try_into().unwrap());
+        }
+        Int {
+            data: t,
+            buffer
+        }
+    }
+}
+
+impl From<Int> for i32 {
+    fn from(t: Int) -> Self {
+        t.data
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Long {
+    data: i64,
+    buffer: Vec<u8>
+}
+
+impl Long {
+    fn change(&mut self, t: i64) {
+        self.data = t;
+        let value: u64 = {
+            let bytes = t.to_be_bytes();
+            u64::from_be_bytes(bytes)
+        };
+        for i in 0..8 {
+            self.buffer.push(((value >> (i * 8)) & 0xFF).try_into().unwrap());
+        }
+    }
+}
+
+impl From<i64> for Long {
+    fn from(t: i64) -> Long {
+        let mut buffer: Vec<u8> = Vec::new();
+        let value: u64 = {
+            let bytes = t.to_be_bytes();
+            u64::from_be_bytes(bytes)
+        };
+        for i in 0..8 {
+            buffer.push(((value >> (i * 8)) & 0xFF).try_into().unwrap());
+        }
+        Long {
+            data: t,
+            buffer
+        }
+    }
+}
+
+impl From<Long> for i64 {
+    fn from(t: Long) -> Self {
+        t.data
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Float {
+    data: f32,
+    buffer: Vec<u8>
+}
+
+impl Float {
+    fn change(&mut self, t: f32) {
+        self.data = t;
         unsafe {
-            let value: u32 = std::mem::transmute::<f32, u32>(arg_value);
+            let value: u32 = std::mem::transmute::<f32, u32>(t);
             for i in 0..4 {
-                self.write_byte(((value >> (i * 8)) & 0xFF).try_into().unwrap());
+                self.buffer.push(((value >> (i * 8)) & 0xFF).try_into().unwrap());
             }
         }
     }
+}
 
-    pub fn write_f64(&mut self, arg_value: f64) {
+impl From<f32> for Float {
+    fn from(t: f32) -> Float {
         unsafe {
-            let value: u64 = std::mem::transmute(arg_value);
+            let mut buffer: Vec<u8> = Vec::new();
+            let value: u32 = std::mem::transmute::<f32, u32>(t);
+            for i in 0..4 {
+                buffer.push(((value >> (i * 8)) & 0xFF).try_into().unwrap());
+            }
+            Float {
+                data: t,
+                buffer
+            }
+        }
+    }
+}
+
+impl From<Float> for f32 {
+    fn from(t: Float) -> Self {
+        t.data
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Double {
+    data: f64,
+    buffer: Vec<u8>
+}
+
+impl Double {
+    fn change(&mut self, t: f64) {
+        self.data = t;
+        unsafe {
+            let value: u64 = std::mem::transmute::<f64, u64>(t);
             for i in 0..8 {
-                self.write_byte(((value >> (i * 8)) & 0xFF).try_into().unwrap());
+                self.buffer.push(((value >> (i * 8)) & 0xFF).try_into().unwrap());
             }
         }
     }
+}
 
-    pub fn write_string(&mut self, mut arg_value: String) {
-        self.write_var_i32(arg_value.len() as i32);
+impl From<f64> for Double{
+    fn from(t: f64) -> Double {
         unsafe {
-            self.write_bytes(arg_value.as_mut_vec().to_vec());
+            let mut buffer: Vec<u8> = Vec::new();
+            let value: u64 = std::mem::transmute::<f64, u64>(t);
+            for i in 0..8 {
+                buffer.push(((value >> (i * 8)) & 0xFF).try_into().unwrap());
+            }
+            Double {
+                data: t,
+                buffer
+            }
         }
     }
+}
 
-    pub fn write_bytes(&mut self, arg_value: Vec<u8>) {
-        for value in arg_value {
-            self.write_byte(value);
+impl From<Double> for f64 {
+    fn from(t: Double) -> Self {
+        t.data
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Str {
+    data: String,
+    buffer: Vec<u8>
+}
+
+impl Str {
+    fn change(&mut self, t: String) {
+        self.data = t.clone();
+        self.buffer.clear();
+        self.buffer.append(&mut VarInt::from(t.len() as i32).buffer);
+        self.buffer.append(&mut t.as_bytes().to_vec());
+    }
+}
+
+impl From<String> for Str {
+    fn from(t: String) -> Str {
+        let mut buffer: Vec<u8> =  Vec::new();
+        buffer.append(&mut VarInt::from(t.len() as i32).buffer);
+        buffer.append(&mut t.as_bytes().to_vec());
+        Str {
+            data: t,
+            buffer
         }
     }
+}
 
-    pub fn write_bool(&mut self, arg_value: bool) {
-        if arg_value {
-            self.write_byte(0x01);
-        } else {
-            self.write_byte(0x00);
+impl From<Str> for String {
+    fn from(t: Str) -> Self {
+        t.data
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ByteArray {
+    buffer: Vec<u8>
+}
+
+impl ByteArray {
+    fn change(&mut self, t: Vec<u8>) {
+        self.buffer = t;
+    }
+}
+
+impl From<Vec<u8>> for ByteArray {
+    fn from(t: Vec<u8>) -> ByteArray {
+        ByteArray {
+            buffer: t
         }
     }
+}
 
-    pub fn write_byte(&mut self, arg_value: u8) {
-        self.buffer.push(arg_value);
+impl From<ByteArray> for Vec<u8> {
+    fn from(t: ByteArray) -> Self {
+        t.buffer
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct Bool {
+    data: bool,
+    buffer: Vec<u8>
+}
+
+impl Bool {
+    fn change(&mut self, t: bool) {
+        self.data = t;
+        self.buffer = vec![if t {0x01} else {0x00}];
+    }
+}
+
+impl From<bool> for Bool {
+    fn from(t: bool) -> Bool {
+        let buffer = vec![if t {0x01} else {0x00}];
+        Bool {
+            data: t,
+            buffer
+        }
+    }
+}
+
+impl From<Bool> for bool {
+    fn from(t: Bool) -> bool {
+        t.data
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Byte {
+    data: u8
+}
+
+impl Byte {
+    fn change(&mut self, t: u8) {
+        self.data = t;
+    }
+}
+
+impl From<u8> for Byte {
+    fn from(t: u8) -> Byte {
+        Byte {
+            data: t
+        }
+    }
+}
+
+impl From<Byte> for u8 {
+    fn from(t: Byte) -> u8 {
+        t.data
+    }
+}
+
+ord_with_self!(VarInt, VarLong, Short, Int, Long, Float, Double, Bool, Byte);
+
+ord_with_field!(VarInt { i32 }, VarLong { i64 }, Short { i16 }, Int { i32 }, Long { i64 },
+                Float { f32 }, Double { f64 }, Bool { bool }, Byte { u8 });
+
+
+#[derive(Clone)]
+pub enum BufTypes {
+    VarInt(VarInt),
+    VarLong(VarLong),
+    Short(Short),
+    Int(Int),
+    Long(Long),
+    Float(Float),
+    Double(Double),
+    Str(Str),
+    ByteArray(ByteArray),
+    Bool(Bool),
+    Byte(Byte),
+    Fail
 }
